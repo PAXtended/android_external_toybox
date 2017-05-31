@@ -5,6 +5,7 @@
  * See http://refspecs.linuxfoundation.org/LSB_4.1.0/LSB-Core-generic/LSB-Core-generic/mount.html
  * Note: -hV is bad spec, haven't implemented -FsLU yet
  * no mtab (/proc/mounts does it) so -n is NOP.
+ * TODO mount -o loop,autoclear (linux git 96c5865559ce)
 
 USE_MOUNT(NEWTOY(mount, "?O:afnrvwt:o*[-rw]", TOYFLAG_BIN|TOYFLAG_STAYROOT))
 //USE_NFSMOUNT(NEWTOY(nfsmount, "?<2>2", TOYFLAG_USR|TOYFLAG_BIN|TOYFLAG_STAYROOT))
@@ -13,7 +14,7 @@ config MOUNT
   bool "mount"
   default y
   help
-    usage: mount [-afFrsvw] [-t TYPE] [-o OPTIONS...] [[DEVICE] DIR]
+    usage: mount [-afFrsvw] [-t TYPE] [-o OPTION,] [[DEVICE] DIR]
 
     Mount new filesystem(s) on directories. With no arguments, display existing
     mounts.
@@ -195,9 +196,10 @@ static void mount_filesystem(char *dev, char *dir, char *type,
     if (toys.optflags & FLAG_v)
       printf("try '%s' type '%s' on '%s'\n", dev, type, dir);
     for (;;) {
+      errno = 0;
       rc = mount(dev, dir, type, flags, opts);
       // Did we succeed, fail unrecoverably, or already try read-only?
-      if (rc == 0 || (errno != EACCES && errno != EROFS) || (flags&MS_RDONLY))
+      if (!rc || (errno != EACCES && errno != EROFS) || (flags&MS_RDONLY))
         break;
       // If we haven't already tried it, use the BLKROSET ioctl to ensure
       // that the underlying device isn't read-only.
@@ -207,7 +209,7 @@ static void mount_filesystem(char *dev, char *dir, char *type,
         if (-1 != (fd = open(dev, O_RDONLY))) {
           rc = ioctl(fd, BLKROSET, &ro);
           close(fd);
-          if (rc == 0) continue;
+          if (!rc) continue;
         }
       }
       fprintf(stderr, "'%s' is read-only\n", dev);
@@ -309,7 +311,6 @@ void mount_main(void)
 
     for (mm = remount ? remount : mtl; mm; mm = (remount ? mm->prev : mm->next))
     {
-      char *aopts = 0;
       struct mtab_list *mmm = 0;
       int aflags, noauto, len;
 
@@ -341,13 +342,20 @@ void mount_main(void)
  
       // user only counts from fstab, not opts.
       if (!mmm) {
+        char *aopts = 0;
         TT.okuser = comma_scan(mm->opts, "user", 1);
         aflags = flag_opts(mm->opts, flags, &aopts);
         aflags = flag_opts(opts, aflags, &aopts);
-
+        if (remount) {
+            // clear type and opts for remount
+            aflags |= MS_REMOUNT;
+            strcpy(mm->type, "none");
+            aopts = NULL;
+        }
         mount_filesystem(mm->device, mm->dir, mm->type, aflags, aopts);
+        free(aopts);
+        if (!remount && errno == EINVAL) continue;
       } // TODO else if (getuid()) error_msg("already there") ?
-      free(aopts);
 
       if (!(toys.optflags & FLAG_a)) break;
     }
@@ -375,7 +383,8 @@ void mount_main(void)
   } else {
     char *more = 0;
 
-    mount_filesystem(dev, dir, TT.type, flag_opts(opts, flags, &more), more);
+    flags = flag_opts(opts, flags, &more);
+    mount_filesystem(dev, dir, TT.type, flags, more);
     if (CFG_TOYBOX_FREE) free(more);
   }
 }

@@ -57,15 +57,33 @@ static const struct fstype fstypes[] = {
   {"vfat", 0x31544146, 4, 54, 39+(4<<24), 11, 43}     // fat1
 };
 
+static const char *vfat_empty   = "           ";
+static const char *vfat_no_name = "NO NAME    ";
+
+static int valid_label(int i, int off)
+{
+  int label_len = fstypes[i].label_len;
+  const char *label = toybuf + fstypes[i].label_off - off;
+
+  if (!strcmp(fstypes[i].name, "vfat")) {
+    if (!memcmp(label, vfat_empty, label_len))
+      return 0;
+    if (!memcmp(label, vfat_no_name, label_len))
+      return 0;
+    return 1;
+  }
+  return 1;
+}
+
 static void do_blkid(int fd, char *name)
 {
-  int off, i, j;
+  int off, i, j, len;
   char *type;
 
   off = i = 0;
 
   for (;;) {
-    int pass = 0, len;
+    int pass = 0;
 
     // Read next block of data
     len = readall(fd, toybuf, sizeof(toybuf));
@@ -99,7 +117,7 @@ static void do_blkid(int fd, char *name)
 
   // distinguish ext2/3/4
   type = fstypes[i].name;
-  if (!i) {
+  if (!strcmp(type, "ext2")) {
     if (toybuf[1116]&4) type = "ext3";
     if (toybuf[1120]&64) type = "ext4";
   }
@@ -115,9 +133,16 @@ static void do_blkid(int fd, char *name)
   // output for blkid
   printf("%s:",name);
 
-  if (fstypes[i].label_len)
-    printf(" LABEL=\"%.*s\"", fstypes[i].label_len,
-           toybuf+fstypes[i].label_off-off);
+  if (fstypes[i].label_len) {
+    char *s = toybuf+fstypes[i].label_off-off;;
+
+    len = fstypes[i].label_len;
+    if (!strcmp(type, "vfat")) {
+      while (len && s[len-1]==' ') len--;
+      if (strstart(&s, "NO NAME")) len=0;
+    }
+    if (len) printf(" LABEL=\"%.*s\"", len, s);
+  }
 
   if (fstypes[i].uuid_off) {
     int bits = 0x550, size = fstypes[i].uuid_off >> 24,

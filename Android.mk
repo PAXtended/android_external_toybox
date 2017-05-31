@@ -16,6 +16,24 @@
 
 LOCAL_PATH := $(call my-dir)
 
+common_cflags := \
+    -std=c99 \
+    -Os \
+    -Wno-char-subscripts \
+    -Wno-sign-compare \
+    -Wno-string-plus-int \
+    -Wno-uninitialized \
+    -Wno-unused-parameter \
+    -funsigned-char \
+    -ffunction-sections -fdata-sections \
+    -fno-asynchronous-unwind-tables \
+
+toybox_upstream_version := $(shell grep -o 'TOYBOX_VERSION.*\".*\"' $(LOCAL_PATH)/main.c | cut -d'"' -f2)
+toybox_sha := $(shell git -C $(LOCAL_PATH) rev-parse --short=12 HEAD 2>/dev/null)
+
+toybox_version := $(toybox_upstream_version)-$(toybox_sha)-android
+common_cflags += -DTOYBOX_VERSION='"$(toybox_version)"'
+
 #
 # To update:
 #
@@ -38,8 +56,7 @@ LOCAL_PATH := $(call my-dir)
 # To add a toy:
 #
 
-#  make menuconfig
-#  # (Select the toy you want to add.)
+#  Edit .config to enable the toy you want to add.
 #  make clean && make  # Regenerate the generated files.
 #  # Edit LOCAL_SRC_FILES below to add the toy.
 #  # If you just want to use it as "toybox x" rather than "x", you can stop now.
@@ -57,16 +74,20 @@ LOCAL_SRC_FILES := \
     lib/linestack.c \
     lib/llist.c \
     lib/net.c \
+    lib/password.c \
     lib/portability.c \
     lib/xwrap.c \
     main.c \
     toys/android/getenforce.c \
     toys/android/getprop.c \
     toys/android/load_policy.c \
+    toys/android/log.c \
     toys/android/restorecon.c \
     toys/android/runcon.c \
+    toys/android/sendevent.c \
     toys/android/setenforce.c \
     toys/android/setprop.c \
+    toys/android/start.c \
     toys/lsb/dmesg.c \
     toys/lsb/hostname.c \
     toys/lsb/killall.c \
@@ -78,6 +99,11 @@ LOCAL_SRC_FILES := \
     toys/lsb/seq.c \
     toys/lsb/sync.c \
     toys/lsb/umount.c \
+    toys/net/ifconfig.c \
+    toys/net/netcat.c \
+    toys/net/netstat.c \
+    toys/net/rfkill.c \
+    toys/net/tunctl.c \
     toys/other/acpi.c \
     toys/other/base64.c \
     toys/other/blkid.c \
@@ -94,35 +120,35 @@ LOCAL_SRC_FILES := \
     toys/other/fsfreeze.c \
     toys/other/help.c \
     toys/other/hwclock.c \
-    toys/other/ifconfig.c \
     toys/other/inotifyd.c \
     toys/other/insmod.c \
     toys/other/ionice.c \
     toys/other/losetup.c \
     toys/other/lsattr.c \
     toys/other/lsmod.c \
+    toys/other/lspci.c \
     toys/other/lsusb.c \
     toys/other/makedevs.c \
     toys/other/mkswap.c \
     toys/other/modinfo.c \
     toys/other/mountpoint.c \
     toys/other/nbd_client.c \
-    toys/other/netcat.c \
     toys/other/partprobe.c \
     toys/other/pivot_root.c \
     toys/other/pmap.c \
     toys/other/printenv.c \
     toys/other/pwdx.c \
+    toys/other/readahead.c \
     toys/other/readlink.c \
     toys/other/realpath.c \
+    toys/other/reset.c \
     toys/other/rev.c \
-    toys/other/rfkill.c \
     toys/other/rmmod.c \
+    toys/other/setfattr.c \
     toys/other/setsid.c \
     toys/other/stat.c \
     toys/other/swapoff.c \
     toys/other/swapon.c \
-    toys/other/switch_root.c \
     toys/other/sysctl.c \
     toys/other/tac.c \
     toys/other/taskset.c \
@@ -135,15 +161,26 @@ LOCAL_SRC_FILES := \
     toys/other/which.c \
     toys/other/xxd.c \
     toys/other/yes.c \
+    toys/pending/arp.c \
+    toys/pending/chrt.c \
     toys/pending/dd.c \
+    toys/pending/diff.c \
     toys/pending/expr.c \
+    toys/pending/fdisk.c \
+    toys/pending/ftpget.c \
+    toys/pending/getfattr.c \
+    toys/pending/host.c \
     toys/pending/lsof.c \
     toys/pending/more.c \
-    toys/pending/netstat.c \
+    toys/pending/resize.c \
     toys/pending/route.c \
     toys/pending/tar.c \
+    toys/pending/telnet.c \
+    toys/pending/test.c \
     toys/pending/tr.c \
     toys/pending/traceroute.c \
+    toys/pending/watch.c \
+    toys/pending/xzcat.c \
     toys/posix/basename.c \
     toys/posix/cal.c \
     toys/posix/cat.c \
@@ -163,6 +200,7 @@ LOCAL_SRC_FILES := \
     toys/posix/env.c \
     toys/posix/expand.c \
     toys/posix/false.c \
+    toys/posix/file.c \
     toys/posix/find.c \
     toys/posix/grep.c \
     toys/posix/head.c \
@@ -199,175 +237,91 @@ LOCAL_SRC_FILES := \
     toys/posix/uname.c \
     toys/posix/uniq.c \
     toys/posix/wc.c \
-    toys/posix/xargs.c \
+    toys/posix/xargs.c
 
-LOCAL_CFLAGS += \
-    -std=c99 \
-    -Os \
-    -Wno-char-subscripts \
-    -Wno-sign-compare \
-    -Wno-string-plus-int \
-    -Wno-uninitialized \
-    -Wno-unused-parameter \
-    -funsigned-char \
-    -ffunction-sections -fdata-sections \
-    -fno-asynchronous-unwind-tables \
-
-toybox_upstream_version := $(shell awk 'match($$0, /TOYBOX_VERSION.*"(.*)"/, ary) {print ary[1]}' $(LOCAL_PATH)/main.c)
-toybox_sha := $(shell git -C $(LOCAL_PATH) rev-parse --short=12 HEAD 2>/dev/null)
-
-toybox_version := $(toybox_upstream_version)-$(toybox_sha)-android
-LOCAL_CFLAGS += -DTOYBOX_VERSION='"$(toybox_version)"'
-
+LOCAL_CFLAGS := $(common_cflags)
 LOCAL_CLANG := true
 
-LOCAL_SHARED_LIBRARIES := libcutils libselinux
+LOCAL_STATIC_LIBRARIES := libselinux libcrypto_static
 
 # This doesn't actually prevent us from dragging in libc++ at runtime
 # because libnetd_client.so is C++.
 LOCAL_CXX_STL := none
 
+LOCAL_C_INCLUDES += bionic/libc/dns/include
+
+LOCAL_MODULE := libtoybox
+
+include $(BUILD_STATIC_LIBRARY)
+
+
+# Host binary to enumerate the toys
+include $(CLEAR_VARS)
+LOCAL_SRC_FILES := scripts/install.c
+LOCAL_MODULE_TAGS := optional
+LOCAL_CFLAGS := $(common_cflags)
+LOCAL_CLANG := true
+LOCAL_MODULE := toybox-instlist
+include $(BUILD_HOST_EXECUTABLE)
+
+
+include $(CLEAR_VARS)
+LOCAL_SRC_FILES := main.c
+LOCAL_STATIC_LIBRARIES := libtoybox
+LOCAL_SHARED_LIBRARIES := libcutils libselinux libcrypto
+LOCAL_CFLAGS := $(common_cflags)
+LOCAL_CXX_STL := none
+LOCAL_CLANG := true
 LOCAL_MODULE := toybox
 
-# dupes: dd
-# useless?: freeramdisk fsfreeze install makedevs mkfifo nbd-client
-#           partprobe pivot_root pwdx rev rfkill switch_root vconfig
-# prefer BSD netcat instead?: nc netcat
-# prefer efs2progs instead?: blkid chattr lsattr
+# for dumping the list of toys
+TOYBOX_INSTLIST := $(HOST_OUT_EXECUTABLES)/toybox-instlist
+LOCAL_ADDITIONAL_DEPENDENCIES := toybox_links
 
-ALL_TOOLS := \
-    acpi \
-    base64 \
-    basename \
-    blockdev \
-    bzcat \
-    cal \
-    cat \
-    chcon \
-    chgrp \
-    chmod \
-    chown \
-    chroot \
-    cksum \
-    clear \
-    comm \
-    cmp \
-    cp \
-    cpio \
-    cut \
-    date \
-    df \
-    dirname \
-    dmesg \
-    dos2unix \
-    du \
-    echo \
-    env \
-    expand \
-    expr \
-    fallocate \
-    false \
-    find \
-    flock \
-    free \
-    getenforce \
-    getprop \
-    groups \
-    head \
-    hostname \
-    hwclock \
-    id \
-    ifconfig \
-    inotifyd \
-    insmod \
-    ionice \
-    iorenice \
-    kill \
-    killall \
-    load_policy \
-    ln \
-    logname \
-    losetup \
-    ls \
-    lsmod \
-    lsof \
-    lsusb \
-    md5sum \
-    mkdir \
-    mknod \
-    mkswap \
-    mktemp \
-    modinfo \
-    more \
-    mount \
-    mountpoint \
-    mv \
-    netstat \
-    nice \
-    nl \
-    nohup \
-    od \
-    paste \
-    patch \
-    pgrep \
-    pidof \
-    pkill \
-    pmap \
-    printenv \
-    printf \
-    pwd \
-    readlink \
-    realpath \
-    renice \
-    restorecon \
-    rm \
-    rmdir \
-    rmmod \
-    route \
-    runcon \
-    sed \
-    seq \
-    setenforce \
-    setprop \
-    setsid \
-    sha1sum \
-    sleep \
-    sort \
-    split \
-    stat \
-    strings \
-    swapoff \
-    swapon \
-    sync \
-    sysctl \
-    tac \
-    tail \
-    tar \
-    taskset \
-    tee \
-    time \
-    timeout \
-    touch \
-    tr \
-    true \
-    truncate \
-    tty \
-    ulimit \
-    umount \
-    uname \
-    uniq \
-    unix2dos \
-    uptime \
-    usleep \
-    vmstat \
-    wc \
-    which \
-    whoami \
-    xargs \
-    xxd \
-    yes \
+# we still want a link for ps, but the toolbox version needs to
+# stick around for compatibility reasons, for now.
+TOYS_FOR_XBIN := ps
 
-# Install the symlinks.
-LOCAL_POST_INSTALL_CMD := $(hide) $(foreach t,$(ALL_TOOLS),ln -sf toybox $(TARGET_OUT)/bin/$(t);)
+# skip links for these toys in the system image, they already have
+# a full-blown counterpart. we still want them for the recovery
+# image though.
+TOYS_WITHOUT_LINKS := blkid traceroute6
 
+include $(BUILD_EXECUTABLE)
+
+toybox_links: $(TOYBOX_INSTLIST)
+toybox_links: TOYBOX_BINARY := $(TARGET_OUT)/bin/toybox
+toybox_links:
+	@echo "Generate Toybox links:" $$($(TOYBOX_INSTLIST))
+	@mkdir -p $(TARGET_OUT_EXECUTABLES) $(TARGET_OUT_OPTIONAL_EXECUTABLES)
+	$(hide) $(TOYBOX_INSTLIST) | grep -vFx -f <(tr ' ' '\n' <<< '$(TOYS_FOR_XBIN) $(TOYS_WITHOUT_LINKS)') | xargs -I'{}' ln -sf toybox '$(TARGET_OUT_EXECUTABLES)/{}'
+	$(hide) tr ' ' '\n' <<< '$(TOYS_FOR_XBIN)' | xargs -I'{}' ln -sf ../bin/toybox '$(TARGET_OUT_OPTIONAL_EXECUTABLES)/{}'
+
+
+# This is used by the recovery system
+include $(CLEAR_VARS)
+LOCAL_SRC_FILES := main.c
+LOCAL_WHOLE_STATIC_LIBRARIES := libselinux libtoybox
+LOCAL_CFLAGS := $(common_cflags)
+LOCAL_CFLAGS += -Dmain=toybox_driver
+LOCAL_CXX_STL := none
+LOCAL_CLANG := true
+LOCAL_MODULE := libtoybox_driver
+include $(BUILD_STATIC_LIBRARY)
+
+# static executable for use in limited environments
+include $(CLEAR_VARS)
+LOCAL_SRC_FILES := main.c
+LOCAL_CFLAGS := $(common_cflags)
+LOCAL_CXX_STL := none
+LOCAL_CLANG := true
+LOCAL_UNSTRIPPED_PATH := $(PRODUCT_OUT)/symbols/utilities
+LOCAL_MODULE := toybox_static
+LOCAL_MODULE_CLASS := UTILITY_EXECUTABLES
+LOCAL_MODULE_PATH := $(PRODUCT_OUT)/utilities
+LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE_STEM := toybox
+LOCAL_PACK_MODULE_RELOCATIONS := false
+LOCAL_STATIC_LIBRARIES := libc libtoybox libcutils libselinux libcrypto_static liblog
+LOCAL_FORCE_STATIC_EXECUTABLE := true
 include $(BUILD_EXECUTABLE)

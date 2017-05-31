@@ -9,7 +9,7 @@
 
 // Test for gcc (using compiler builtin #define)
 
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__APPLE__)
 #define noreturn	__attribute__((noreturn))
 #define printf_format	__attribute__((format(printf, 1, 2)))
 #else
@@ -22,7 +22,9 @@
 
 // This isn't in the spec, but it's how we determine what libc we're using.
 
+#ifndef __APPLE__
 #include <features.h>
+#endif
 
 // Types various replacement prototypes need
 #include <sys/types.h>
@@ -116,6 +118,9 @@ pid_t getsid(pid_t pid);
 #ifndef MS_SHARED
 #define MS_SHARED     (1<<20)
 #endif
+#ifndef MS_RELATIME
+#define MS_RELATIME (1<<21)
+#endif
 
 // When building under obsolete glibc (Ubuntu 8.04-ish), hold its hand a bit.
 #elif __GLIBC__ == 2 && __GLIBC_MINOR__ < 10
@@ -154,17 +159,9 @@ int utimensat(int fd, const char *path, const struct timespec times[2], int flag
 
 #endif // glibc in general
 
-#if !defined(__GLIBC__) && !defined(__BIONIC__)
+#if !defined(__GLIBC__)
 // POSIX basename.
 #include <libgen.h>
-#endif
-
-// glibc was handled above; for 32-bit bionic we need to avoid a collision
-// with toybox's basename_r so we can't include <libgen.h> even though that
-// would give us a POSIX basename(3).
-#if defined(__BIONIC__)
-char *basename(char *path);
-char *dirname(char *path);
 #endif
 
 // Work out how to do endianness
@@ -210,13 +207,16 @@ int clearenv(void);
 
 #if defined(__APPLE__) \
     || (defined(__GLIBC__) && __GLIBC__ == 2 && __GLIBC_MINOR__ < 10)
+#include <stdio.h>
 ssize_t getdelim(char **lineptr, size_t *n, int delim, FILE *stream);
 ssize_t getline(char **lineptr, size_t *n, FILE *stream);
 #endif
 
 // Linux headers not listed by POSIX or LSB
 #include <sys/mount.h>
+#ifndef __APPLE__
 #include <sys/swap.h>
+#endif
 
 // Android is missing some headers and functions
 // "generated/config.h" is included first
@@ -275,3 +275,9 @@ pid_t xfork(void);
 //#define strncpy(...) @@strncpyisbadmmkay@@
 //#define strncat(...) @@strncatisbadmmkay@@
 
+#ifdef __ANDROID__
+#include <cutils/sched_policy.h>
+#else
+static inline int get_sched_policy(int tid, void *policy) {return 0;}
+static inline char *get_sched_policy_name(int policy) {return "unknown";}
+#endif
